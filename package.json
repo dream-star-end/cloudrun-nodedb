@@ -2,9 +2,11 @@
   "name": "cloudrun-nodedb",
   "version": "1.0.0",
   "private": true,
+  "description": "CloudBase CloudRun DB proxy service (Node.js + @cloudbase/node-sdk)",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
   },
   "dependencies": {
     "@cloudbase/node-sdk": "^3.7.0",
