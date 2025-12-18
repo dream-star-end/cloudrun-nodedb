@@ -33,10 +33,32 @@ app.get("/health", (req, res) => ok(res, { status: "healthy", env: getEnvId(), r
 // ---------------- DB APIs ----------------
 // 注意：这些接口只建议内网访问（Python 主服务调用），不要暴露到公网。
 
+// 递归处理查询条件，将 {"$date": "..."} 转为 new Date(...)
+function processQuery(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(processQuery);
+  } else if (obj && typeof obj === "object") {
+    // 检查是否是 {"$date": "..."} 结构
+    if (Object.keys(obj).length === 1 && obj["$date"] && typeof obj["$date"] === "string") {
+      return new Date(obj["$date"]);
+    }
+    // 递归处理对象的每个值
+    const newObj = {};
+    for (const key in obj) {
+      newObj[key] = processQuery(obj[key]);
+    }
+    return newObj;
+  }
+  return obj;
+}
+
 app.post("/db/get_one", async (req, res) => {
   try {
-    const { collection, where } = req.body || {};
+    let { collection, where } = req.body || {};
     if (!collection || !where) return fail(res, 400, "缺少 collection/where");
+    
+    where = processQuery(where); // 处理日期对象
+    
     const db = getDb();
     const r = await db.collection(collection).where(where).limit(1).get();
     return ok(res, r?.data?.[0] || null);
@@ -47,8 +69,11 @@ app.post("/db/get_one", async (req, res) => {
 
 app.post("/db/query", async (req, res) => {
   try {
-    const { collection, where, limit = 100, orderBy, order = "asc", skip = 0 } = req.body || {};
+    let { collection, where, limit = 100, orderBy, order = "asc", skip = 0 } = req.body || {};
     if (!collection || !where) return fail(res, 400, "缺少 collection/where");
+    
+    where = processQuery(where); // 处理日期对象
+    
     const db = getDb();
     let q = db.collection(collection).where(where);
     if (orderBy) q = q.orderBy(orderBy, order);
