@@ -33,19 +33,47 @@ app.get("/health", (req, res) => ok(res, { status: "healthy", env: getEnvId(), r
 // ---------------- DB APIs ----------------
 // 注意：这些接口只建议内网访问（Python 主服务调用），不要暴露到公网。
 
-// 递归处理查询条件，将 {"$date": "..."} 转为 new Date(...)
-function processQuery(obj) {
+// 递归处理查询条件：
+// - 将 {"$date": "..."} 转为 new Date(...)
+// - 将 Mongo 风格比较操作符（$gte/$gt/$lte/$lt/$in/$nin/$ne）转换为 cloudbase db.command 表达式
+function processQuery(obj, cmd) {
   if (Array.isArray(obj)) {
-    return obj.map(processQuery);
+    return obj.map((v) => processQuery(v, cmd));
   } else if (obj && typeof obj === "object") {
     // 检查是否是 {"$date": "..."} 结构
     if (Object.keys(obj).length === 1 && obj["$date"] && typeof obj["$date"] === "string") {
       return new Date(obj["$date"]);
     }
+
+    // 处理类似 { "$gte": ..., "$lt": ... } 的操作符对象
+    const keys = Object.keys(obj);
+    const isOpObject = keys.length > 0 && keys.every((k) => k.startsWith("$"));
+    if (isOpObject && cmd) {
+      const opMap = {
+        $gte: (v) => cmd.gte(v),
+        $gt: (v) => cmd.gt(v),
+        $lte: (v) => cmd.lte(v),
+        $lt: (v) => cmd.lt(v),
+        $in: (v) => cmd.in(v),
+        $nin: (v) => cmd.nin(v),
+        $ne: (v) => cmd.neq(v),
+      };
+
+      let expr = null;
+      for (const k of keys) {
+        const fn = opMap[k];
+        if (!fn) continue;
+        const val = processQuery(obj[k], cmd);
+        const part = fn(val);
+        expr = expr ? expr.and(part) : part;
+      }
+      if (expr) return expr;
+    }
+
     // 递归处理对象的每个值
     const newObj = {};
     for (const key in obj) {
-      newObj[key] = processQuery(obj[key]);
+      newObj[key] = processQuery(obj[key], cmd);
     }
     return newObj;
   }
@@ -56,10 +84,9 @@ app.post("/db/get_one", async (req, res) => {
   try {
     let { collection, where } = req.body || {};
     if (!collection || !where) return fail(res, 400, "缺少 collection/where");
-    
-    where = processQuery(where); // 处理日期对象
-    
+
     const db = getDb();
+    where = processQuery(where, db.command); // 处理日期对象/比较操作符
     const r = await db.collection(collection).where(where).limit(1).get();
     return ok(res, r?.data?.[0] || null);
   } catch (e) {
@@ -71,10 +98,9 @@ app.post("/db/query", async (req, res) => {
   try {
     let { collection, where, limit = 100, orderBy, order = "asc", skip = 0 } = req.body || {};
     if (!collection || !where) return fail(res, 400, "缺少 collection/where");
-    
-    where = processQuery(where); // 处理日期对象
-    
+
     const db = getDb();
+    where = processQuery(where, db.command); // 处理日期对象/比较操作符
     let q = db.collection(collection).where(where);
     if (orderBy) q = q.orderBy(orderBy, order);
     if (skip) q = q.skip(skip);
