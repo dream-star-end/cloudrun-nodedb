@@ -14,6 +14,13 @@ app.use(cors({ origin: corsOrigins.includes("*") ? true : corsOrigins }));
 
 app.use(express.json({ limit: "1mb" }));
 
+// Request logging middleware
+app.use((req, res, next) => {
+  const bodyStr = JSON.stringify(req.body || {});
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} body=${bodyStr.substring(0, 200)}`);
+  next();
+});
+
 function ok(res, data) {
   return res.json({ success: true, data });
 }
