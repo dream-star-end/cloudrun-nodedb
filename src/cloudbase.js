@@ -13,11 +13,24 @@ function getRegion() {
 }
 
 function initApp(context = null) {
-  return cloudbase.init({
+  const config = {
     env: getEnvId(),
     region: getRegion(),
     context: context || undefined,
-  });
+  };
+
+  // 尝试从环境变量读取密钥（如果在云托管免鉴权失败或本地运行时需要）
+  const secretId = process.env.TENCENT_SECRET_ID || process.env.TENCENTCLOUD_SECRETID;
+  const secretKey = process.env.TENCENT_SECRET_KEY || process.env.TENCENTCLOUD_SECRETKEY;
+  const token = process.env.TENCENT_TOKEN || process.env.TENCENTCLOUD_SESSIONTOKEN;
+
+  if (secretId && secretKey) {
+    config.secretId = secretId;
+    config.secretKey = secretKey;
+    if (token) config.token = token;
+  }
+
+  return cloudbase.init(config);
 }
 
 function getDb(context = null) {
