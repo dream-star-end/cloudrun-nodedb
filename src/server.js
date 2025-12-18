@@ -114,10 +114,13 @@ app.post("/db/query", async (req, res) => {
 
 app.post("/db/add", async (req, res) => {
   try {
-    const { collection, data } = req.body || {};
+    let { collection, data } = req.body || {};
     if (!collection || !data) return fail(res, 400, "缺少 collection/data");
     const db = getDb();
-    const r = await db.collection(collection).add(data);
+    // 统一处理 data：支持 {"$date": "..."} -> Date
+    data = processQuery(data, db.command);
+    // CloudBase SDK 的 add 需要形如：add({ data: {...} })
+    const r = await db.collection(collection).add({ data });
     return ok(res, r);
   } catch (e) {
     return fail(res, 500, "db/add 失败", { error: String(e?.message || e) });
@@ -126,10 +129,14 @@ app.post("/db/add", async (req, res) => {
 
 app.post("/db/update", async (req, res) => {
   try {
-    const { collection, where, data } = req.body || {};
+    let { collection, where, data } = req.body || {};
     if (!collection || !where || !data) return fail(res, 400, "缺少 collection/where/data");
     const db = getDb();
-    const r = await db.collection(collection).where(where).update(data);
+    // where/data 统一处理：日期对象/比较操作符等
+    where = processQuery(where, db.command);
+    data = processQuery(data, db.command);
+    // CloudBase SDK 的 update 需要形如：update({ data: {...} })
+    const r = await db.collection(collection).where(where).update({ data });
     return ok(res, r);
   } catch (e) {
     return fail(res, 500, "db/update 失败", { error: String(e?.message || e) });
@@ -138,10 +145,11 @@ app.post("/db/update", async (req, res) => {
 
 app.post("/db/update_by_id", async (req, res) => {
   try {
-    const { collection, doc_id, data } = req.body || {};
+    let { collection, doc_id, data } = req.body || {};
     if (!collection || !doc_id || !data) return fail(res, 400, "缺少 collection/doc_id/data");
     const db = getDb();
-    const r = await db.collection(collection).doc(doc_id).update(data);
+    data = processQuery(data, db.command);
+    const r = await db.collection(collection).doc(doc_id).update({ data });
     return ok(res, r);
   } catch (e) {
     return fail(res, 500, "db/update_by_id 失败", { error: String(e?.message || e) });
@@ -150,9 +158,10 @@ app.post("/db/update_by_id", async (req, res) => {
 
 app.post("/db/delete", async (req, res) => {
   try {
-    const { collection, where } = req.body || {};
+    let { collection, where } = req.body || {};
     if (!collection || !where) return fail(res, 400, "缺少 collection/where");
     const db = getDb();
+    where = processQuery(where, db.command);
     const r = await db.collection(collection).where(where).remove();
     return ok(res, r);
   } catch (e) {
