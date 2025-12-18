@@ -20,15 +20,24 @@ function initApp(context = null) {
   };
 
   // 尝试从环境变量读取密钥（如果在云托管免鉴权失败或本地运行时需要）
-  const secretId = process.env.TENCENT_SECRET_ID || process.env.TENCENTCLOUD_SECRETID;
-  const secretKey = process.env.TENCENT_SECRET_KEY || process.env.TENCENTCLOUD_SECRETKEY;
-  const token = process.env.TENCENT_TOKEN || process.env.TENCENTCLOUD_SESSIONTOKEN;
+  // 增加 trim() 防止复制粘贴时带入空格
+  const secretId = (process.env.TENCENT_SECRET_ID || process.env.TENCENTCLOUD_SECRETID || "").trim();
+  const secretKey = (process.env.TENCENT_SECRET_KEY || process.env.TENCENTCLOUD_SECRETKEY || "").trim();
+  const token = (process.env.TENCENT_TOKEN || process.env.TENCENTCLOUD_SESSIONTOKEN || "").trim();
 
   if (secretId && secretKey) {
     config.secretId = secretId;
     config.secretKey = secretKey;
     if (token) config.token = token;
   }
+
+  // Debug log to check credentials
+  console.log("Init CloudBase:", {
+    env: config.env,
+    hasSecretId: !!config.secretId,
+    sidPrefix: config.secretId ? config.secretId.substring(0, 4) + "***" : "N/A",
+    hasSecretKey: !!config.secretKey,
+  });
 
   return cloudbase.init(config);
 }
