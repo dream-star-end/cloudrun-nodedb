@@ -82,13 +82,13 @@ function processQuery(obj, cmd) {
 
 app.post("/db/get_one", async (req, res) => {
   try {
-    let { collection, where } = req.body || {};
+    var { collection, where } = req.body || {};
     if (!collection || !where) return fail(res, 400, "缺少 collection/where");
 
     const db = getDb();
     where = processQuery(where, db.command); // 处理日期对象/比较操作符
-    const r = await db.collection(collection).where(where).limit(1).get();
-    return ok(res, r?.data?.[0] || null);
+    const doc = await db.collection(collection).where(where).limit(1).get();
+    return ok(res, doc?.data?.[0] || null);
   } catch (e) {
     return fail(res, 500, "db/get_one 失败", { error: String(e?.message || e) });
   }
@@ -96,7 +96,7 @@ app.post("/db/get_one", async (req, res) => {
 
 app.post("/db/query", async (req, res) => {
   try {
-    let { collection, where, limit = 100, orderBy, order = "asc", skip = 0 } = req.body || {};
+    var { collection, where, limit = 100, orderBy, order = "asc", skip = 0 } = req.body || {};
     if (!collection || !where) return fail(res, 400, "缺少 collection/where");
 
     const db = getDb();
@@ -105,8 +105,8 @@ app.post("/db/query", async (req, res) => {
     if (orderBy) q = q.orderBy(orderBy, order);
     if (skip) q = q.skip(skip);
     if (limit) q = q.limit(limit);
-    const r = await q.get();
-    return ok(res, r?.data || []);
+    const list = await q.get();
+    return ok(res, list?.data || []);
   } catch (e) {
     return fail(res, 500, "db/query 失败", { error: String(e?.message || e) });
   }
@@ -114,14 +114,14 @@ app.post("/db/query", async (req, res) => {
 
 app.post("/db/add", async (req, res) => {
   try {
-    let { collection, data } = req.body || {};
+    var { collection, data } = req.body || {};
     if (!collection || !data) return fail(res, 400, "缺少 collection/data");
     const db = getDb();
-    // 统一处理 data：支持 {"$date": "..."} -> Date
+    // Normalize payload: {"$date":"..."} -> Date
     data = processQuery(data, db.command);
-    // CloudBase SDK 的 add 需要形如：add({ data: {...} })
-    const r = await db.collection(collection).add({ data });
-    return ok(res, r);
+    // CloudBase SDK: add({ data: {...} })
+    const addRes = await db.collection(collection).add({ data });
+    return ok(res, addRes);
   } catch (e) {
     return fail(res, 500, "db/add 失败", { error: String(e?.message || e) });
   }
@@ -129,15 +129,15 @@ app.post("/db/add", async (req, res) => {
 
 app.post("/db/update", async (req, res) => {
   try {
-    let { collection, where, data } = req.body || {};
+    var { collection, where, data } = req.body || {};
     if (!collection || !where || !data) return fail(res, 400, "缺少 collection/where/data");
     const db = getDb();
-    // where/data 统一处理：日期对象/比较操作符等
+    // Normalize where/data: date objects and operator expressions
     where = processQuery(where, db.command);
     data = processQuery(data, db.command);
-    // CloudBase SDK 的 update 需要形如：update({ data: {...} })
-    const r = await db.collection(collection).where(where).update({ data });
-    return ok(res, r);
+    // CloudBase SDK: update({ data: {...} })
+    const updRes = await db.collection(collection).where(where).update({ data });
+    return ok(res, updRes);
   } catch (e) {
     return fail(res, 500, "db/update 失败", { error: String(e?.message || e) });
   }
@@ -145,12 +145,12 @@ app.post("/db/update", async (req, res) => {
 
 app.post("/db/update_by_id", async (req, res) => {
   try {
-    let { collection, doc_id, data } = req.body || {};
+    var { collection, doc_id, data } = req.body || {};
     if (!collection || !doc_id || !data) return fail(res, 400, "缺少 collection/doc_id/data");
     const db = getDb();
     data = processQuery(data, db.command);
-    const r = await db.collection(collection).doc(doc_id).update({ data });
-    return ok(res, r);
+    const updIdRes = await db.collection(collection).doc(doc_id).update({ data });
+    return ok(res, updIdRes);
   } catch (e) {
     return fail(res, 500, "db/update_by_id 失败", { error: String(e?.message || e) });
   }
@@ -158,12 +158,12 @@ app.post("/db/update_by_id", async (req, res) => {
 
 app.post("/db/delete", async (req, res) => {
   try {
-    let { collection, where } = req.body || {};
+    var { collection, where } = req.body || {};
     if (!collection || !where) return fail(res, 400, "缺少 collection/where");
     const db = getDb();
     where = processQuery(where, db.command);
-    const r = await db.collection(collection).where(where).remove();
-    return ok(res, r);
+    const delRes = await db.collection(collection).where(where).remove();
+    return ok(res, delRes);
   } catch (e) {
     return fail(res, 500, "db/delete 失败", { error: String(e?.message || e) });
   }
@@ -174,8 +174,8 @@ app.post("/db/delete_by_id", async (req, res) => {
     const { collection, doc_id } = req.body || {};
     if (!collection || !doc_id) return fail(res, 400, "缺少 collection/doc_id");
     const db = getDb();
-    const r = await db.collection(collection).doc(doc_id).remove();
-    return ok(res, r);
+    const delIdRes = await db.collection(collection).doc(doc_id).remove();
+    return ok(res, delIdRes);
   } catch (e) {
     return fail(res, 500, "db/delete_by_id 失败", { error: String(e?.message || e) });
   }
@@ -187,4 +187,4 @@ app.listen(port, "0.0.0.0", () => {
   console.log(`[cloudrun-nodedb] listening on :${port}, env=${process.env.TCB_ENV || ""}`);
 });
 
-
+module.exports = app;
