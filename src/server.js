@@ -137,8 +137,10 @@ app.post("/db/add", async (req, res) => {
     const db = getDb();
     // Normalize payload: {"$date":"..."} -> Date
     data = processQuery(data, db.command);
-    // CloudBase SDK: add({ data: {...} })
-    const addRes = await db.collection(collection).add({ data });
+    // @cloudbase/node-sdk: add() 直接接受数据对象，不需要 { data: ... } 包装
+    // 错误用法: add({ data }) 会导致数据被嵌套在 data 字段下
+    // 正确用法: add(data) 直接存储字段到文档顶层
+    const addRes = await db.collection(collection).add(data);
     console.log(`[db/add] collection=${collection}, result:`, JSON.stringify(addRes));
     return ok(res, addRes);
   } catch (e) {
@@ -154,8 +156,8 @@ app.post("/db/update", async (req, res) => {
     // Normalize where/data: date objects and operator expressions
     where = processQuery(where, db.command);
     data = processQuery(data, db.command);
-    // CloudBase SDK: update({ data: {...} })
-    const updRes = await db.collection(collection).where(where).update({ data });
+    // @cloudbase/node-sdk: update() 直接接受数据对象
+    const updRes = await db.collection(collection).where(where).update(data);
     return ok(res, updRes);
   } catch (e) {
     return fail(res, 500, "db/update 失败", { error: String(e?.message || e) });
@@ -168,7 +170,8 @@ app.post("/db/update_by_id", async (req, res) => {
     if (!collection || !doc_id || !data) return fail(res, 400, "缺少 collection/doc_id/data");
     const db = getDb();
     data = processQuery(data, db.command);
-    const updIdRes = await db.collection(collection).doc(doc_id).update({ data });
+    // @cloudbase/node-sdk: update() 直接接受数据对象
+    const updIdRes = await db.collection(collection).doc(doc_id).update(data);
     return ok(res, updIdRes);
   } catch (e) {
     return fail(res, 500, "db/update_by_id 失败", { error: String(e?.message || e) });
