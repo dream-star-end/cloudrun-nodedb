@@ -94,6 +94,24 @@ app.post("/db/get_one", async (req, res) => {
   }
 });
 
+// 根据文档 ID 获取文档（使用 .doc() 方法，比 where 查 _id 更可靠）
+app.post("/db/get_by_id", async (req, res) => {
+  try {
+    const { collection, doc_id } = req.body || {};
+    if (!collection || !doc_id) return fail(res, 400, "缺少 collection/doc_id");
+
+    const db = getDb();
+    const doc = await db.collection(collection).doc(doc_id).get();
+    return ok(res, doc?.data?.[0] || null);
+  } catch (e) {
+    // CloudBase SDK 在文档不存在时可能抛出错误，返回 null
+    if (e?.message?.includes("not exist") || e?.errCode === -502005) {
+      return ok(res, null);
+    }
+    return fail(res, 500, "db/get_by_id 失败", { error: String(e?.message || e) });
+  }
+});
+
 app.post("/db/query", async (req, res) => {
   try {
     var { collection, where, limit = 100, orderBy, order = "asc", skip = 0 } = req.body || {};
