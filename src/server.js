@@ -139,6 +139,7 @@ app.post("/db/add", async (req, res) => {
     data = processQuery(data, db.command);
     // CloudBase SDK: add({ data: {...} })
     const addRes = await db.collection(collection).add({ data });
+    console.log(`[db/add] collection=${collection}, result:`, JSON.stringify(addRes));
     return ok(res, addRes);
   } catch (e) {
     return fail(res, 500, "db/add 失败", { error: String(e?.message || e) });
