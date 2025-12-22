@@ -57,6 +57,8 @@ function processQuery(obj, cmd) {
         $in: (v) => cmd.in(v),
         $nin: (v) => cmd.nin(v),
         $ne: (v) => cmd.neq(v),
+        // 数组字段包含匹配：tags: { "$all": ["标签"] }
+        $all: (v) => cmd.all(v),
       };
 
       let expr = null;
