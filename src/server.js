@@ -36,6 +36,7 @@ app.get("/health", (req, res) => ok(res, { status: "healthy", env: getEnvId(), r
 // 递归处理查询条件：
 // - 将 {"$date": "..."} 转为 new Date(...)
 // - 将 Mongo 风格比较操作符（$gte/$gt/$lte/$lt/$in/$nin/$ne）转换为 cloudbase db.command 表达式
+// - 将 $or/$and 逻辑操作符转换为 cloudbase db.command 表达式
 function processQuery(obj, cmd) {
   if (Array.isArray(obj)) {
     return obj.map((v) => processQuery(v, cmd));
@@ -43,6 +44,32 @@ function processQuery(obj, cmd) {
     // 检查是否是 {"$date": "..."} 结构
     if (Object.keys(obj).length === 1 && obj["$date"] && typeof obj["$date"] === "string") {
       return new Date(obj["$date"]);
+    }
+
+    // 处理 $or 逻辑操作符：{ "$or": [{...}, {...}] }
+    // CloudBase SDK 中 $or 需要使用 cmd.or([...]) 并且需要放在 where 的顶层
+    if (obj["$or"] && Array.isArray(obj["$or"]) && cmd) {
+      const orConditions = obj["$or"].map((cond) => processQuery(cond, cmd));
+      // 如果只有 $or 一个 key，直接返回 cmd.or(...)
+      if (Object.keys(obj).length === 1) {
+        return cmd.or(orConditions);
+      }
+      // 如果有其他字段，需要合并（这种情况比较复杂，一般不推荐）
+      const newObj = { ...processQuery({ ...obj, $or: undefined }, cmd) };
+      delete newObj.$or;
+      // 把 $or 条件放进去（CloudBase 可能不支持这种混合方式，但尽力处理）
+      return cmd.and([newObj, cmd.or(orConditions)]);
+    }
+
+    // 处理 $and 逻辑操作符：{ "$and": [{...}, {...}] }
+    if (obj["$and"] && Array.isArray(obj["$and"]) && cmd) {
+      const andConditions = obj["$and"].map((cond) => processQuery(cond, cmd));
+      if (Object.keys(obj).length === 1) {
+        return cmd.and(andConditions);
+      }
+      const newObj = { ...processQuery({ ...obj, $and: undefined }, cmd) };
+      delete newObj.$and;
+      return cmd.and([newObj, ...andConditions]);
     }
 
     // 处理类似 { "$gte": ..., "$lt": ... } 的操作符对象
