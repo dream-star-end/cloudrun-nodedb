@@ -28,6 +28,38 @@ function fail(res, status, message, extra = {}) {
   return res.status(status).json({ success: false, message, ...extra });
 }
 
+// 对顶层的嵌套普通对象使用 cmd.set() 包装，避免 CloudBase 将其展开为点号路径
+// 这解决了 "Cannot create field 'xxx' in element {field: null}" 的问题
+// 只处理顶层字段，且只处理普通对象（非 Date、非数组、非 command 表达式）
+function wrapNestedObjectsWithSet(data, cmd) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return data;
+  }
+  const result = {};
+  for (const key of Object.keys(data)) {
+    const val = data[key];
+    // 跳过 null/undefined、原始类型、Date、数组
+    if (val === null || val === undefined || typeof val !== "object" || val instanceof Date || Array.isArray(val)) {
+      result[key] = val;
+      continue;
+    }
+    // 跳过已经是 command 表达式的值（有 _setType 或其他内部标记）
+    if (val._setType || val._actions || val._callFunction) {
+      result[key] = val;
+      continue;
+    }
+    // 跳过带有 $date 等特殊结构（已被 processQuery 处理为 Date）
+    // 跳过点号路径字段（如 "unreadCount.xxx"）
+    if (key.includes(".")) {
+      result[key] = val;
+      continue;
+    }
+    // 对于普通嵌套对象，使用 set() 命令确保整体替换
+    result[key] = cmd.set(val);
+  }
+  return result;
+}
+
 app.get("/health", (req, res) => ok(res, { status: "healthy", env: getEnvId(), region: getRegion() }));
 
 // ---------------- DB APIs ----------------
@@ -198,7 +230,11 @@ app.post("/db/update_by_id", async (req, res) => {
     var { collection, doc_id, data } = req.body || {};
     if (!collection || !doc_id || !data) return fail(res, 400, "缺少 collection/doc_id/data");
     const db = getDb();
-    data = processQuery(data, db.command);
+    const cmd = db.command;
+    data = processQuery(data, cmd);
+    // 对于嵌套对象字段，使用 set() 命令确保整体替换而非深度合并
+    // 避免 "Cannot create field 'xxx' in element {field: null}" 错误
+    data = wrapNestedObjectsWithSet(data, cmd);
     // @cloudbase/node-sdk: update() 直接接受数据对象
     const updIdRes = await db.collection(collection).doc(doc_id).update(data);
     return ok(res, updIdRes);
